@@ -83,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
                         "JSON.stringify((function() {\n" +
                                 "    let date = new Date();\n" +
                                 "    let dataArr = []\n" +
-                                "    while(date >= new Date(2020,2,18)){//since march 1st\n" +
+                                "    while(date >= new Date(2020,2,1)){//since march 1st\n" +
                                 "        var request = new XMLHttpRequest();\n" +
                                 "        let year = date.getYear()+1900;\n" +
                                 "        let month = date.getMonth();\n" +
