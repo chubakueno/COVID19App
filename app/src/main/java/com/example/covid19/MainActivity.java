@@ -1,17 +1,9 @@
 package com.example.covid19;
 
-import android.content.Context;
+import android.annotation.SuppressLint;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
-import android.content.SharedPreferences;
 import android.os.Bundle;
-
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.annotation.NonNull;
-import androidx.core.content.ContextCompat;
-
 import android.view.MenuItem;
 import android.view.View;
 import android.webkit.ValueCallback;
@@ -19,32 +11,86 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.TextView;
-import android.widget.Toast;
 
-public class MainActivity extends AppCompatActivity {
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
+
+import com.example.covid19.api.models.requests.LocationHistoryRequest;
+import com.example.covid19.api.models.responses.LocationHistoryResponse;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+public class MainActivity extends BaseActivity {
+    final String loggedInUrl = "https://myaccount.google.com/";
+    final String timelineUrl = "https://www.google.com/";
+    final int marchStartingDate = 1;
+
     private WebView webView;
     private Button downloadButton;
-    String loggedInUrl = "https://myaccount.google.com/";
-    String timelineUrl = "https://www.google.com/";
-    String dataKey = "downloadedData";
-    String appPackage = "com.example.covid19";
+    private ProgressDialog progressDialog;
+
     protected void showSavedDataDialog(){
-        SharedPreferences prefs = MainActivity.this.getSharedPreferences(
-                appPackage, Context.MODE_PRIVATE);
-        String savedData = prefs.getString(dataKey, null);
-        AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this)
+        new AlertDialog.Builder(MainActivity.this)
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .setTitle("Operacion exitosa")
-                .setMessage(savedData)
+                .setMessage("¡Muchas gracias por contribuir en nuestra lucha!")
                 .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        //set what would happen when positive button is clicked
-                        finish();
+                        //nothing
                     }
                 })
                 .show();
+    }
+    void configureDownload(){
+        downloadButton.setBackgroundColor(ContextCompat.getColor(MainActivity.this, R.color.colorPrimary));
+        downloadButton.setTextColor(0xFFFFFFFF);
+        downloadButton.setText(R.string.download_data);
+        downloadButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String script = buildJavascriptPayload();
+                progressDialog = ProgressDialog.show(MainActivity.this,"Recopilando datos","Por favor espere");
+                webView.evaluateJavascript(
+                        script, new ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String jsonKmlData) {
+                                progressDialog.dismiss();
+                                setData(jsonKmlData);
+                                configureUpload();
+                            }
+                        });
+            }
+        });
+    }
+    void configureUpload(){
+        downloadButton.setBackgroundColor(ContextCompat.getColor(MainActivity.this,R.color.colorAccent));
+        downloadButton.setTextColor(0xFFFFFFFF);
+        downloadButton.setText(R.string.upload_data);
+        downloadButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                progressDialog = ProgressDialog.show(MainActivity.this,"Subiendo datos","Por favor espere");
+                apiInterface.uploadData(new LocationHistoryRequest(userId, getData())).enqueue(new Callback<LocationHistoryResponse>() {
+                    @Override
+                    public void onResponse(Call<LocationHistoryResponse> call, Response<LocationHistoryResponse> response) {
+                        progressDialog.dismiss();
+                        if(response.isSuccessful() && response.body().success){
+                            showSavedDataDialog();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<LocationHistoryResponse> call, Throwable t) {
+                        progressDialog.dismiss();
+                    }
+                });
+            }
+        });
     }
     private BottomNavigationView.OnNavigationItemSelectedListener mOnNavigationItemSelectedListener
             = new BottomNavigationView.OnNavigationItemSelectedListener() {
@@ -65,75 +111,58 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
     };
+    String buildJavascriptPayload(){
+        return "JSON.stringify((function() {\n" +
+                "    let date = new Date();\n" +
+                "    let dataArr = []\n" +
+                "    while(date >= new Date(2020,2,"+marchStartingDate+")){//since march 1st\n" +
+                "        var request = new XMLHttpRequest();\n" +
+                "        let year = date.getYear()+1900;\n" +
+                "        let month = date.getMonth();\n" +
+                "        let day = date.getDate();\n" +
+                "        let url = 'https://www.google.com/maps/timeline/kml?authuser=0&pb=!1m8!1m3!1i'+year+'!2i'+month+'!3i'+day+'!2m3!1i'+year+'!2i'+month+'!3i'+day+''\n" +
+                "        request.open('GET', url, false);" +
+                "        request.send(null);\n" +
+                "        if (request.status === 200) {\n" +
+                "          dataArr.push(request.responseText);\n" +
+                "        }\n" +
+                "        date.setDate(date.getDate()-1);\n" +
+                "    }\n" +
+                "    return dataArr;\n" +
+                "})());";
+    }
+    @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         BottomNavigationView navView = findViewById(R.id.nav_view);
-        webView = findViewById(R.id.webView);
         downloadButton = findViewById(R.id.downloadButton);
-        webView.loadUrl("https://myaccount.google.com/intro");
+        webView = findViewById(R.id.webView);
         WebSettings webSettings = webView.getSettings();
         webSettings.setJavaScriptEnabled(true);
-        final View.OnClickListener clickListener = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                System.out.println("Click:");
-                String script =
-                        "JSON.stringify((function() {\n" +
-                                "    let date = new Date();\n" +
-                                "    let dataArr = []\n" +
-                                "    while(date >= new Date(2020,2,1)){//since march 1st\n" +
-                                "        var request = new XMLHttpRequest();\n" +
-                                "        let year = date.getYear()+1900;\n" +
-                                "        let month = date.getMonth();\n" +
-                                "        request.open('GET', 'https://www.google.com/maps/timeline/kml?authuser=0&pb=!1m8!1m3!1i2020!2i2!3i1!2m3!1i2020!2i2!3i1', false);\n" +
-                                "        request.send(null);\n" +
-                                "        if (request.status === 200) {\n" +
-                                "          dataArr.push(request.responseText);\n" +
-                                "        }\n" +
-                                "        date.setDate(date.getDate()-1);\n" +
-                                "    }\n" +
-                                "    return dataArr;\n" +
-                                "})());";
-                System.out.println(script);
-                webView.evaluateJavascript(
-                        script, new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String s) {
-                        SharedPreferences prefs = MainActivity.this.getSharedPreferences(
-                                appPackage, Context.MODE_PRIVATE);
-                        prefs.edit().putString(dataKey,s).apply();
-                        downloadButton.setBackgroundColor(ContextCompat.getColor(MainActivity.this,R.color.colorAccent));
-                        downloadButton.setTextColor(0xFFFFFFFF);
-                        downloadButton.setText("Subir datos");
-                        downloadButton.setOnClickListener(new View.OnClickListener() {
-                            @Override
-                            public void onClick(View view) {
-                                showSavedDataDialog();
-                            }
-                        });
-                    }
-                });
-            }
-        };
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return false;
-            }
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                if(loggedInUrl.equals(url)){
-                    webView.loadUrl(timelineUrl);
-                } else if (timelineUrl.equals(url)){
-                    downloadButton.setBackgroundColor(ContextCompat.getColor(MainActivity.this,R.color.colorPrimary));
-                    downloadButton.setTextColor(0xFFFFFFFF);
-                    downloadButton.setOnClickListener(clickListener);;
-                    downloadButton.setText("Descargar datos");
+
+        if(getData()==null) {
+            webView.loadUrl("https://myaccount.google.com/intro");
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                    return false;
                 }
-            }
-        });
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    if (loggedInUrl.equals(url)) {
+                        webView.loadUrl(timelineUrl);
+                    } else if (timelineUrl.equals(url)) {
+                        configureDownload();
+                    }
+                }
+            });
+        } else {
+            webView.loadUrl(timelineUrl);
+            configureUpload();
+        }
         navView.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
     }
 
