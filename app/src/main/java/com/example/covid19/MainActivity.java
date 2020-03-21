@@ -114,7 +114,7 @@ public class MainActivity extends BaseActivity {
     String buildJavascriptPayload(){
         return "JSON.stringify((function() {\n" +
                 "    let date = new Date();\n" +
-                "    let dataArr = []\n" +
+                "    let dateObj = {}\n" +
                 "    while(date >= new Date(2020,2,"+marchStartingDate+")){//since march 1st\n" +
                 "        var request = new XMLHttpRequest();\n" +
                 "        let year = date.getYear()+1900;\n" +
@@ -124,11 +124,11 @@ public class MainActivity extends BaseActivity {
                 "        request.open('GET', url, false);" +
                 "        request.send(null);\n" +
                 "        if (request.status === 200) {\n" +
-                "          dataArr.push(request.responseText);\n" +
+                "          dateObj[day+'-'+(month+1)+'-'+year]=request.responseText;\n" +
                 "        }\n" +
                 "        date.setDate(date.getDate()-1);\n" +
                 "    }\n" +
-                "    return dataArr;\n" +
+                "    return dateObj;\n" +
                 "})());";
     }
     @SuppressLint("SetJavaScriptEnabled")
