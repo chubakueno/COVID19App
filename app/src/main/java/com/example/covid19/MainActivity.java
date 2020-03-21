@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat;
 
 import com.example.covid19.api.models.requests.LocationHistoryRequest;
 import com.example.covid19.api.models.responses.LocationHistoryResponse;
+import com.example.covid19.utils.Anonimizer;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import retrofit2.Call;
@@ -67,6 +68,23 @@ public class MainActivity extends BaseActivity {
             }
         });
     }
+    void sendAnonimized(){
+        apiInterface.uploadData(new LocationHistoryRequest(userId, Anonimizer.anonimize(getData())))
+                .enqueue(new Callback<LocationHistoryResponse>() {
+            @Override
+            public void onResponse(Call<LocationHistoryResponse> call, Response<LocationHistoryResponse> response) {
+                progressDialog.dismiss();
+                if(response.isSuccessful() && response.body().success){
+                    showSavedDataDialog();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<LocationHistoryResponse> call, Throwable t) {
+                progressDialog.dismiss();
+            }
+        });
+    }
     void configureUpload(){
         downloadButton.setBackgroundColor(ContextCompat.getColor(MainActivity.this,R.color.colorAccent));
         downloadButton.setTextColor(0xFFFFFFFF);
@@ -75,20 +93,7 @@ public class MainActivity extends BaseActivity {
             @Override
             public void onClick(View view) {
                 progressDialog = ProgressDialog.show(MainActivity.this,"Subiendo datos","Por favor espere");
-                apiInterface.uploadData(new LocationHistoryRequest(userId, getData())).enqueue(new Callback<LocationHistoryResponse>() {
-                    @Override
-                    public void onResponse(Call<LocationHistoryResponse> call, Response<LocationHistoryResponse> response) {
-                        progressDialog.dismiss();
-                        if(response.isSuccessful() && response.body().success){
-                            showSavedDataDialog();
-                        }
-                    }
-
-                    @Override
-                    public void onFailure(Call<LocationHistoryResponse> call, Throwable t) {
-                        progressDialog.dismiss();
-                    }
-                });
+                sendAnonimized();
             }
         });
     }
@@ -112,9 +117,9 @@ public class MainActivity extends BaseActivity {
         }
     };
     String buildJavascriptPayload(){
-        return "JSON.stringify((function() {\n" +
+        return  "(function() {\n" +
                 "    let date = new Date();\n" +
-                "    let dateObj = {}\n" +
+                "    let dateArr = []\n" +
                 "    while(date >= new Date(2020,2,"+marchStartingDate+")){//since march 1st\n" +
                 "        var request = new XMLHttpRequest();\n" +
                 "        let year = date.getYear()+1900;\n" +
@@ -124,12 +129,12 @@ public class MainActivity extends BaseActivity {
                 "        request.open('GET', url, false);" +
                 "        request.send(null);\n" +
                 "        if (request.status === 200) {\n" +
-                "          dateObj[day+'-'+(month+1)+'-'+year]=request.responseText;\n" +
+                "          dateArr.push({date: day+'-'+(month+1)+'-'+year, data: request.responseText});\n" +
                 "        }\n" +
                 "        date.setDate(date.getDate()-1);\n" +
                 "    }\n" +
-                "    return dateObj;\n" +
-                "})());";
+                "    return dateArr;\n" +
+                "})();";
     }
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -165,5 +170,4 @@ public class MainActivity extends BaseActivity {
         }
         navView.setOnNavigationItemSelectedListener(mOnNavigationItemSelectedListener);
     }
-
 }
